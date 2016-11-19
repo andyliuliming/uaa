@@ -268,7 +268,7 @@ public class LoginMockMvcTests extends InjectedMockContextTest {
             .andExpect(status().isForbidden())
             .andExpect(forwardedUrl("/login?error=invalid_login_request"));
 
-        ScimUser marissa = getWebApplicationContext().getBean(JdbcScimUserProvisioning.class).query("username eq 'marissa'").get(0);
+         
 
         MockHttpServletRequestBuilder validPost = post("/uaa/login.do")
             .session(session)
