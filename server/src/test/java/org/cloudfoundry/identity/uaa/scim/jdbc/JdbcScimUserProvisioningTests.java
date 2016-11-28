@@ -16,6 +16,7 @@ import org.cloudfoundry.identity.uaa.constants.OriginKeys;
 import org.cloudfoundry.identity.uaa.audit.event.EntityDeletedEvent;
 import org.cloudfoundry.identity.uaa.provider.IdentityProvider;
 import org.cloudfoundry.identity.uaa.resources.SimpleAttributeNameMapper;
+import org.cloudfoundry.identity.uaa.resources.jdbc.DefaultBooleanValueAdapter;
 import org.cloudfoundry.identity.uaa.resources.jdbc.JdbcPagingListFactory;
 import org.cloudfoundry.identity.uaa.scim.ScimUser;
 import org.cloudfoundry.identity.uaa.scim.ScimUser.Group;
@@ -99,7 +100,7 @@ public class JdbcScimUserProvisioningTests extends JdbcTestBase {
     public void initJdbcScimUserProvisioningTests() throws Exception {
         db = new JdbcScimUserProvisioning(jdbcTemplate, new JdbcPagingListFactory(jdbcTemplate, limitSqlAdapter));
         zoneDb = new JdbcIdentityZoneProvisioning(jdbcTemplate);
-        providerDb = new JdbcIdentityProviderProvisioning(jdbcTemplate);
+        providerDb = new JdbcIdentityProviderProvisioning(jdbcTemplate, new DefaultBooleanValueAdapter());
         ScimSearchQueryConverter filterConverter = new ScimSearchQueryConverter();
         Map<String, String> replaceWith = new HashMap<String, String>();
         replaceWith.put("emails\\.value", "email");

@@ -12,7 +12,7 @@
  *******************************************************************************/
 package org.cloudfoundry.identity.uaa.user;
 
-
+import org.cloudfoundry.identity.uaa.resources.jdbc.BooleanValueAdapter;
 import org.cloudfoundry.identity.uaa.zone.IdentityZoneHolder;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.dao.IncorrectResultSizeDataAccessException;
@@ -58,6 +58,8 @@ public class JdbcUaaUserDatabase implements UaaUserDatabase {
 
     private JdbcTemplate jdbcTemplate;
 
+    private final BooleanValueAdapter booleanValueAdapter;
+
     private final RowMapper<UaaUser> mapper = new UaaUserRowMapper();
 
     private Set<String> defaultAuthorities = new HashSet<String>();
@@ -85,16 +87,17 @@ public class JdbcUaaUserDatabase implements UaaUserDatabase {
         this.defaultAuthorities = defaultAuthorities;
     }
 
-    public JdbcUaaUserDatabase(JdbcTemplate jdbcTemplate) {
+    public JdbcUaaUserDatabase(JdbcTemplate jdbcTemplate, BooleanValueAdapter booleanValueAdapter) {
         Assert.notNull(jdbcTemplate);
         this.jdbcTemplate = jdbcTemplate;
+        this.booleanValueAdapter = booleanValueAdapter;
     }
 
     @Override
     public UaaUser retrieveUserByName(String username, String origin) throws UsernameNotFoundException {
         try {
             String sql = isCaseInsensitive() ? DEFAULT_CASE_INSENSITIVE_USER_BY_USERNAME_QUERY : DEFAULT_CASE_SENSITIVE_USER_BY_USERNAME_QUERY;
-            return jdbcTemplate.queryForObject(sql, mapper, username.toLowerCase(Locale.US), true, origin, IdentityZoneHolder.get().getId());
+            return jdbcTemplate.queryForObject(sql, mapper, username.toLowerCase(Locale.US), this.booleanValueAdapter.getTrueValue(), origin, IdentityZoneHolder.get().getId());
         } catch (EmptyResultDataAccessException e) {
             throw new UsernameNotFoundException(username);
         }
@@ -103,7 +106,7 @@ public class JdbcUaaUserDatabase implements UaaUserDatabase {
     @Override
     public UaaUser retrieveUserById(String id) throws UsernameNotFoundException {
         try {
-            return jdbcTemplate.queryForObject(DEFAULT_USER_BY_ID_QUERY, mapper, id, true, IdentityZoneHolder.get().getId());
+            return jdbcTemplate.queryForObject(DEFAULT_USER_BY_ID_QUERY, mapper, id, this.booleanValueAdapter.getTrueValue(), IdentityZoneHolder.get().getId());
         } catch (EmptyResultDataAccessException e) {
             throw new UsernameNotFoundException(id);
         }
@@ -112,7 +115,7 @@ public class JdbcUaaUserDatabase implements UaaUserDatabase {
     @Override
     public UaaUser retrieveUserByEmail(String email, String origin) throws UsernameNotFoundException {
         String sql = isCaseInsensitive() ? DEFAULT_CASE_INSENSITIVE_USER_BY_EMAIL_AND_ORIGIN_QUERY : DEFAULT_CASE_SENSITIVE_USER_BY_EMAIL_AND_ORIGIN_QUERY;
-        List<UaaUser> results = jdbcTemplate.query(sql, mapper, email.toLowerCase(Locale.US), true, origin, IdentityZoneHolder.get().getId());
+        List<UaaUser> results = jdbcTemplate.query(sql, mapper, email.toLowerCase(Locale.US), this.booleanValueAdapter.getTrueValue(), origin, IdentityZoneHolder.get().getId());
         if(results.size() == 0) {
             return null;
         }
