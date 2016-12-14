@@ -222,6 +222,8 @@ public class LoginInfoEndpoint {
     }
 
     private String login(Model model, Principal principal, List<String> excludedPrompts, boolean jsonResponse, HttpServletRequest request) {
+        if(principal instanceof UaaAuthentication && ((UaaAuthentication)principal).isAuthenticated()) { return "redirect:/home"; }
+
         HttpSession session = request != null ? request.getSession(false) : null;
         List<String> allowedIdps = null;
         String clientName = null;
@@ -238,6 +240,7 @@ public class LoginInfoEndpoint {
         combinedIdps.putAll(oauthIdentityProviderDefinitions);
 
         boolean fieldUsernameShow = true;
+        boolean returnLoginPrompts = true;
 
         IdentityProvider ldapIdentityProvider = null;
         try {
@@ -249,6 +252,7 @@ public class LoginInfoEndpoint {
         if (!uaaIdentityProvider.isActive()) {
             if (ldapIdentityProvider == null || !ldapIdentityProvider.isActive()) {
                 fieldUsernameShow = false;
+                returnLoginPrompts = false;
             }
         }
 
@@ -347,6 +351,11 @@ public class LoginInfoEndpoint {
         excludedPrompts = new LinkedList<>(excludedPrompts);
         if (noIdpsPresent) {
             excludedPrompts.add(PASSCODE);
+        }
+
+        if(!returnLoginPrompts){
+            excludedPrompts.add("username");
+            excludedPrompts.add("password");
         }
 
         populatePrompts(model, excludedPrompts, jsonResponse);
@@ -514,6 +523,7 @@ public class LoginInfoEndpoint {
     }
 
     private String goToPasswordPage(String email, Model model) {
+        model.addAttribute(ZONE_NAME, IdentityZoneHolder.get().getName());
         model.addAttribute("email", email);
         String forgotPasswordLink;
         if ((forgotPasswordLink = getSelfServiceLinks().get(FORGOT_PASSWORD_LINK)) != null) {
@@ -654,23 +664,17 @@ public class LoginInfoEndpoint {
         IdentityProvider<UaaIdentityProviderDefinition> uaaIdp = providerProvisioning.retrieveByOrigin(OriginKeys.UAA, IdentityZoneHolder.get().getId());
         boolean disableInternalUserManagement = (uaaIdp.getConfig()!=null) ? uaaIdp.getConfig().isDisableInternalUserManagement() : false;
         boolean selfServiceLinksEnabled = (zone.getConfig()!=null) ? zone.getConfig().getLinks().getSelfService().isSelfServiceLinksEnabled() : true;
-        String signup = zone.getConfig()!=null ? zone.getConfig().getLinks().getSelfService().getSignup() : null;
-        String passwd = zone.getConfig()!=null ? zone.getConfig().getLinks().getSelfService().getPasswd() : null;
+        String signup = zone.getConfig()!=null ? zone.getConfig().getLinks().getSelfService().getSignup() : "/create_account";
+        String passwd = zone.getConfig()!=null ? zone.getConfig().getLinks().getSelfService().getPasswd() : "/forgot_password";
 
         if (selfServiceLinksEnabled && !disableInternalUserManagement) {
-            selfServiceLinks.put(CREATE_ACCOUNT_LINK, "/create_account");
-            selfServiceLinks.put("register", "/create_account");
-            selfServiceLinks.put(FORGOT_PASSWORD_LINK, "/forgot_password");
-            selfServiceLinks.put("passwd", "/forgot_password");
-            if(IdentityZoneHolder.isUaa()) {
-                if (hasText(signup)) {
-                    selfServiceLinks.put(CREATE_ACCOUNT_LINK, signup);
-                    selfServiceLinks.put("register", signup);
-                }
-                if (hasText(passwd)) {
-                    selfServiceLinks.put(FORGOT_PASSWORD_LINK, passwd);
-                    selfServiceLinks.put("passwd", passwd);
-                }
+            if (hasText(signup)) {
+                selfServiceLinks.put(CREATE_ACCOUNT_LINK, signup);
+                selfServiceLinks.put("register", signup);
+            }
+            if (hasText(passwd)) {
+                selfServiceLinks.put(FORGOT_PASSWORD_LINK, passwd);
+                selfServiceLinks.put("passwd", passwd);
             }
         }
         return selfServiceLinks;

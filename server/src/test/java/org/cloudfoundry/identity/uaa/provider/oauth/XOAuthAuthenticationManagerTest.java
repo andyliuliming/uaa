@@ -14,6 +14,8 @@
 package org.cloudfoundry.identity.uaa.provider.oauth;
 
 import org.apache.commons.codec.binary.Base64;
+import org.cloudfoundry.identity.uaa.authentication.UaaAuthentication;
+import org.cloudfoundry.identity.uaa.authentication.AccountNotPreCreatedException;
 import org.cloudfoundry.identity.uaa.authentication.manager.ExternalGroupAuthorizationEvent;
 import org.cloudfoundry.identity.uaa.authentication.manager.InvitedUserAuthenticatedEvent;
 import org.cloudfoundry.identity.uaa.authentication.manager.NewUserAuthenticatedEvent;
@@ -65,7 +67,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.cloudfoundry.identity.uaa.provider.ExternalIdentityProviderDefinition.GROUP_ATTRIBUTE_NAME;
-import static org.cloudfoundry.identity.uaa.provider.ExternalIdentityProviderDefinition.USER_NAME_ATTRIBUTE_PREFIX;
+import static org.cloudfoundry.identity.uaa.provider.ExternalIdentityProviderDefinition.USER_NAME_ATTRIBUTE_NAME;
 import static org.cloudfoundry.identity.uaa.util.UaaMapUtils.entry;
 import static org.cloudfoundry.identity.uaa.util.UaaMapUtils.map;
 import static org.hamcrest.Matchers.containsInAnyOrder;
@@ -73,8 +75,10 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -102,6 +106,7 @@ public class XOAuthAuthenticationManagerTest {
     private static final String CODE = "the_code";
 
     private static final String ORIGIN = "the_origin";
+    private static final String ISSUER = "cf-app.com";
     private IdentityProvider<AbstractXOAuthIdentityProviderDefinition> identityProvider;
     private Map<String, Object> claims;
     private HashMap<String, Object> attributeMappings;
@@ -165,6 +170,7 @@ public class XOAuthAuthenticationManagerTest {
             entry("rev_sig", "3314dc98"),
             entry("cid", "client")
         );
+
         attributeMappings = new HashMap<>();
 
         config = new XOIDCIdentityProviderDefinition()
@@ -184,15 +190,7 @@ public class XOAuthAuthenticationManagerTest {
     @Test
     public void exchangeExternalCodeForIdToken_andCreateShadowUser() throws Exception {
         mockToken();
-        doAnswer(invocation -> {
-            Object e = invocation.getArguments()[0];
-            if (e instanceof NewUserAuthenticatedEvent) {
-                NewUserAuthenticatedEvent event = (NewUserAuthenticatedEvent) e;
-                UaaUser user = event.getUser();
-                userDatabase.addUser(user);
-            }
-            return null;
-        }).when(publisher).publishEvent(Matchers.any(ApplicationEvent.class));
+        addTheUserOnAuth();
 
         xoAuthAuthenticationManager.authenticate(xCodeToken);
 
@@ -214,7 +212,7 @@ public class XOAuthAuthenticationManagerTest {
     }
 
 
-    @Test(expected = IllegalStateException.class)
+    @Test(expected = AccountNotPreCreatedException.class)
     public void doesNotCreateShadowUserAndFailsAuthentication_IfAddShadowUserOnLoginIsFalse() throws Exception {
         config.setAddShadowUserOnLogin(false);
         mockToken();
@@ -409,13 +407,13 @@ public class XOAuthAuthenticationManagerTest {
 
     @Test
     public void authenticatedUser_hasConfigurableUsernameField() throws Exception {
-        attributeMappings.put(USER_NAME_ATTRIBUTE_PREFIX, "username");
+        attributeMappings.put(USER_NAME_ATTRIBUTE_NAME, "username");
 
         claims.remove("preferred_username");
         claims.put("username", "marissa");
         mockToken();
 
-        UaaUser uaaUser = xoAuthAuthenticationManager.getUser(xCodeToken);
+        UaaUser uaaUser = xoAuthAuthenticationManager.getUser(xCodeToken, getAuthenticationData(xCodeToken));
 
         assertThat(uaaUser.getUsername(), is("marissa"));
     }
@@ -424,19 +422,48 @@ public class XOAuthAuthenticationManagerTest {
     public void getUserWithNullEmail() throws MalformedURLException {
         claims.put("email", null);
         mockToken();
-        UaaUser user = xoAuthAuthenticationManager.getUser(xCodeToken);
+        UaaUser user = xoAuthAuthenticationManager.getUser(xCodeToken, getAuthenticationData(xCodeToken));
 
         assertEquals("marissa@user.from.the_origin.cf", user.getEmail());
     }
 
+    private XOAuthAuthenticationManager.AuthenticationData getAuthenticationData(XOAuthCodeToken xCodeToken) {
+        return xoAuthAuthenticationManager.getExternalAuthenticationDetails(xCodeToken);
+    }
+
     @Test
     public void testGetUserSetsTheRightOrigin() {
-        xoAuthAuthenticationManager.getUser(xCodeToken);
+        xoAuthAuthenticationManager.getUser(xCodeToken, getAuthenticationData(xCodeToken));
         assertEquals(ORIGIN, xoAuthAuthenticationManager.getOrigin());
 
         XOAuthCodeToken otherToken = new XOAuthCodeToken(CODE, "other_origin", "http://localhost/callback/the_origin");
-        xoAuthAuthenticationManager.getUser(otherToken);
+        xoAuthAuthenticationManager.getUser(otherToken, getAuthenticationData(otherToken));
         assertEquals("other_origin", xoAuthAuthenticationManager.getOrigin());
+    }
+
+    @Test
+    public void testGetUserIssuerOverrideNotUsed() throws Exception {
+        mockToken();
+        assertNotNull(xoAuthAuthenticationManager.getUser(xCodeToken, getAuthenticationData(xCodeToken)));
+    }
+
+    @Test
+    public void testGetUserIssuerOverrideUsedNoMatch() throws Exception {
+        config.setIssuer(ISSUER);
+        mockToken();
+        try {
+            xoAuthAuthenticationManager.getUser(xCodeToken, getAuthenticationData(xCodeToken));
+            fail("InvalidTokenException should have been thrown");
+        } catch(InvalidTokenException ex) { }
+    }
+
+    @Test
+    public void testGetUserIssuerOverrideUsedMatch() throws Exception {
+        config.setIssuer(ISSUER);
+        claims.remove("iss");
+        claims.put("iss", ISSUER);
+        mockToken();
+        assertNotNull(xoAuthAuthenticationManager.getUser(xCodeToken, getAuthenticationData(xCodeToken)));
     }
 
     @Test
@@ -473,6 +500,27 @@ public class XOAuthAuthenticationManagerTest {
         xoAuthAuthenticationManager.authenticate(xCodeToken);
     }
 
+    private void addTheUserOnAuth() {
+        doAnswer(invocation -> {
+            Object e = invocation.getArguments()[0];
+            if (e instanceof NewUserAuthenticatedEvent) {
+                NewUserAuthenticatedEvent event = (NewUserAuthenticatedEvent) e;
+                UaaUser user = event.getUser();
+                userDatabase.addUser(user);
+            }
+            return null;
+        }).when(publisher).publishEvent(Matchers.any(ApplicationEvent.class));
+    }
+
+    @Test
+    public void authenticationContainsAMRClaim_fromExternalOIDCProvider() throws Exception {
+        addTheUserOnAuth();
+        claims.put("amr", Arrays.asList("mfa", "rba"));
+        mockToken();
+        UaaAuthentication authentication = (UaaAuthentication)xoAuthAuthenticationManager.authenticate(xCodeToken);
+        assertThat(authentication.getAuthenticationMethods(), containsInAnyOrder("mfa", "rba", "ext"));
+    }
+
     private void mockToken() throws MalformedURLException {
         String idTokenJwt = UaaTokenUtils.constructToken(header, claims, signer);
         identityProvider = getProvider();
@@ -507,7 +555,7 @@ public class XOAuthAuthenticationManagerTest {
         attributeMappings.put(GROUP_ATTRIBUTE_NAME, "scope");
         mockToken();
 
-        UaaUser uaaUser = xoAuthAuthenticationManager.getUser(xCodeToken);
+        UaaUser uaaUser = xoAuthAuthenticationManager.getUser(xCodeToken, getAuthenticationData(xCodeToken));
 
         List<String> authorities = uaaUser.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList());
         assertThat(authorities, containsInAnyOrder("openid", "some.other.scope", "closedid"));

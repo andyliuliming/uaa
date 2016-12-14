@@ -13,6 +13,7 @@
 package org.cloudfoundry.identity.uaa.scim.endpoints;
 
 import org.cloudfoundry.identity.uaa.account.PasswordChangeRequest;
+import org.cloudfoundry.identity.uaa.account.UserAccountStatus;
 import org.cloudfoundry.identity.uaa.approval.Approval;
 import org.cloudfoundry.identity.uaa.approval.ApprovalStore;
 import org.cloudfoundry.identity.uaa.constants.OriginKeys;
@@ -57,7 +58,9 @@ import static org.springframework.restdocs.request.RequestDocumentation.pathPara
 import static org.springframework.restdocs.request.RequestDocumentation.requestParameters;
 import static org.springframework.restdocs.snippet.Attributes.key;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 public class ScimUserEndpointDocs extends InjectedMockContextTest {
@@ -95,6 +98,13 @@ public class ScimUserEndpointDocs extends InjectedMockContextTest {
     private final String passwordLastModifiedDescription = "The timestamp this user's password was last changed.";
     private final String externalIdDescription = "External user ID if authenticated through external identity provider.";
     private final String passwordDescription = "User's password.";
+    private final String phoneNumbersListDescription = "The user's phone numbers.";
+    private final String phoneNumbersDescription = "The phone number.";
+
+    private final String metaDesc = "SCIM object meta data.";
+    private final String metaVersionDesc = "Object version.";
+    private final String metaLastModifiedDesc = "Object last modified date.";
+    private final String metaCreatedDesc = "Object created date.";
 
     FieldDescriptor[] searchResponseFields = {
         fieldWithPath("startIndex").type(NUMBER).description(startIndexDescription),
@@ -107,8 +117,10 @@ public class ScimUserEndpointDocs extends InjectedMockContextTest {
         fieldWithPath("resources[].name").type(OBJECT).description(nameObjectDescription),
         fieldWithPath("resources[].name.familyName").type(STRING).description(lastnameDescription),
         fieldWithPath("resources[].name.givenName").type(STRING).description(firstnameDescription),
+        fieldWithPath("resources[].phoneNumbers").type(ARRAY).description(phoneNumbersListDescription),
+        fieldWithPath("resources[].phoneNumbers[].value").type(STRING).description(phoneNumbersDescription),
         fieldWithPath("resources[].emails").type(ARRAY).description(emailListDescription),
-        fieldWithPath("resources[].emails[].value").type(ARRAY).description(emailDescription),
+        fieldWithPath("resources[].emails[].value").type(STRING).description(emailDescription),
         fieldWithPath("resources[].emails[].primary").type(BOOLEAN).description(emailPrimaryDescription),
         fieldWithPath("resources[].groups").type(ARRAY).description(groupDescription),
         fieldWithPath("resources[].groups[].value").type(STRING).description(groupIdDescription),
@@ -126,6 +138,11 @@ public class ScimUserEndpointDocs extends InjectedMockContextTest {
         fieldWithPath("resources[].origin").type(STRING).description(userOriginDescription),
         fieldWithPath("resources[].zoneId").type(STRING).description(userZoneIdDescription),
         fieldWithPath("resources[].passwordLastModified").type(STRING).description(passwordLastModifiedDescription),
+        fieldWithPath("resources[].externalId").type(STRING).description(externalIdDescription),
+        fieldWithPath("resources[].meta").type(STRING).description(metaDesc),
+        fieldWithPath("resources[].meta.version").type(NUMBER).description(metaVersionDesc),
+        fieldWithPath("resources[].meta.lastModified").type(STRING).description(metaLastModifiedDesc),
+        fieldWithPath("resources[].meta.created").type(STRING).description(metaCreatedDesc)
     };
 
     Snippet createFields = requestFields(
@@ -134,8 +151,10 @@ public class ScimUserEndpointDocs extends InjectedMockContextTest {
         fieldWithPath("name").required().type(OBJECT).description(nameObjectDescription),
         fieldWithPath("name.familyName").required().type(STRING).description(lastnameDescription),
         fieldWithPath("name.givenName").required().type(STRING).description(firstnameDescription),
+        fieldWithPath("phoneNumbers").optional(null).type(ARRAY).description(phoneNumbersListDescription),
+        fieldWithPath("phoneNumbers[].value").optional(null).type(STRING).description(phoneNumbersDescription),
         fieldWithPath("emails").required().type(ARRAY).description(emailListDescription),
-        fieldWithPath("emails[].value").required().type(ARRAY).description(emailDescription),
+        fieldWithPath("emails[].value").required().type(STRING).description(emailDescription),
         fieldWithPath("emails[].primary").required().type(BOOLEAN).description(emailPrimaryDescription),
         fieldWithPath("active").optional(true).type(BOOLEAN).description(userActiveDescription),
         fieldWithPath("verified").optional(false).type(BOOLEAN).description(userVerifiedDescription),
@@ -152,8 +171,10 @@ public class ScimUserEndpointDocs extends InjectedMockContextTest {
         fieldWithPath("name").type(OBJECT).description(nameObjectDescription),
         fieldWithPath("name.familyName").type(STRING).description(lastnameDescription),
         fieldWithPath("name.givenName").type(STRING).description(firstnameDescription),
+        fieldWithPath("phoneNumbers").type(ARRAY).description(phoneNumbersListDescription),
+        fieldWithPath("phoneNumbers[].value").type(STRING).description(phoneNumbersDescription),
         fieldWithPath("emails").type(ARRAY).description(emailListDescription),
-        fieldWithPath("emails[].value").type(ARRAY).description(emailDescription),
+        fieldWithPath("emails[].value").type(STRING).description(emailDescription),
         fieldWithPath("emails[].primary").type(BOOLEAN).description(emailPrimaryDescription),
         fieldWithPath("groups").type(ARRAY).description(groupDescription),
         fieldWithPath("groups[].value").type(STRING).description(groupIdDescription),
@@ -166,10 +187,10 @@ public class ScimUserEndpointDocs extends InjectedMockContextTest {
         fieldWithPath("zoneId").type(STRING).description(userZoneIdDescription),
         fieldWithPath("passwordLastModified").type(STRING).description(passwordLastModifiedDescription),
         fieldWithPath("externalId").type(STRING).description(externalIdDescription),
-        fieldWithPath("meta").type(STRING).description("SCIM object meta data."),
-        fieldWithPath("meta.version").type(NUMBER).description("Object version."),
-        fieldWithPath("meta.lastModified").type(STRING).description("Object last modified date."),
-        fieldWithPath("meta.created").type(STRING).description("Object created date."),
+        fieldWithPath("meta").type(STRING).description(metaDesc),
+        fieldWithPath("meta.version").type(NUMBER).description(metaVersionDesc),
+        fieldWithPath("meta.lastModified").type(STRING).description(metaLastModifiedDesc),
+        fieldWithPath("meta.created").type(STRING).description(metaCreatedDesc)
     };
 
     Snippet updateFields = requestFields(
@@ -179,8 +200,10 @@ public class ScimUserEndpointDocs extends InjectedMockContextTest {
         fieldWithPath("name").required().type(OBJECT).description(nameObjectDescription),
         fieldWithPath("name.familyName").required().type(STRING).description(lastnameDescription),
         fieldWithPath("name.givenName").required().type(STRING).description(firstnameDescription),
+        fieldWithPath("phoneNumbers").optional(null).type(ARRAY).description(phoneNumbersListDescription),
+        fieldWithPath("phoneNumbers[].value").optional(null).type(STRING).description(phoneNumbersDescription),
         fieldWithPath("emails").required().type(ARRAY).description(emailListDescription),
-        fieldWithPath("emails[].value").required().type(ARRAY).description(emailDescription),
+        fieldWithPath("emails[].value").required().type(STRING).description(emailDescription),
         fieldWithPath("emails[].primary").required().type(BOOLEAN).description(emailPrimaryDescription),
         fieldWithPath("groups").ignored().type(ARRAY).description("Groups are not created at this time."),
         fieldWithPath("approvals").ignored().type(ARRAY).description("Approvals are not created at this time"),
@@ -200,8 +223,10 @@ public class ScimUserEndpointDocs extends InjectedMockContextTest {
         fieldWithPath("name").type(OBJECT).description(nameObjectDescription),
         fieldWithPath("name.familyName").type(STRING).description(lastnameDescription),
         fieldWithPath("name.givenName").type(STRING).description(firstnameDescription),
+        fieldWithPath("phoneNumbers").type(ARRAY).description(phoneNumbersListDescription),
+        fieldWithPath("phoneNumbers[].value").type(STRING).description(phoneNumbersDescription),
         fieldWithPath("emails").type(ARRAY).description(emailListDescription),
-        fieldWithPath("emails[].value").type(ARRAY).description(emailDescription),
+        fieldWithPath("emails[].value").type(STRING).description(emailDescription),
         fieldWithPath("emails[].primary").type(BOOLEAN).description(emailPrimaryDescription),
         fieldWithPath("groups").type(ARRAY).description(groupDescription),
         fieldWithPath("groups[].value").type(STRING).description(groupIdDescription),
@@ -220,10 +245,10 @@ public class ScimUserEndpointDocs extends InjectedMockContextTest {
         fieldWithPath("zoneId").type(STRING).description(userZoneIdDescription),
         fieldWithPath("passwordLastModified").type(STRING).description(passwordLastModifiedDescription),
         fieldWithPath("externalId").type(STRING).description(externalIdDescription),
-        fieldWithPath("meta").type(STRING).description("SCIM object meta data."),
-        fieldWithPath("meta.version").type(NUMBER).description("Object version."),
-        fieldWithPath("meta.lastModified").type(STRING).description("Object last modified date."),
-        fieldWithPath("meta.created").type(STRING).description("Object created date."),
+        fieldWithPath("meta").type(STRING).description(metaDesc),
+        fieldWithPath("meta.version").type(NUMBER).description(metaVersionDesc),
+        fieldWithPath("meta.lastModified").type(STRING).description(metaLastModifiedDesc),
+        fieldWithPath("meta.created").type(STRING).description(metaCreatedDesc)
     };
 
     private final String scimFilterDescription = "SCIM filter for searching";
@@ -235,7 +260,7 @@ public class ScimUserEndpointDocs extends InjectedMockContextTest {
         parameterWithName("sortBy").optional("created").description(sortByDescription).attributes(key("type").value(STRING)),
         parameterWithName("sortOrder").optional("ascending").description(sortOrderDescription).attributes(key("type").value(STRING)),
         parameterWithName("startIndex").optional("1").description(startIndexDescription).attributes(key("type").value(NUMBER)),
-        parameterWithName("count").optional("100").description(countDescription).attributes(key("type").value(NUMBER)),
+        parameterWithName("count").optional("100").description(countDescription).attributes(key("type").value(NUMBER))
     };
 
     private String scimReadToken;
@@ -285,6 +310,7 @@ public class ScimUserEndpointDocs extends InjectedMockContextTest {
         user.setPrimaryEmail(username);
         user.setPassword("secret");
         user.setExternalId("test-user");
+        user.addPhoneNumber("5555555555");
         return user;
     }
 
@@ -337,10 +363,39 @@ public class ScimUserEndpointDocs extends InjectedMockContextTest {
                          preprocessRequest(prettyPrint()),
                          preprocessResponse(prettyPrint()),
                          requestHeaders(
-                             headerWithName("Authorization").description("Access token with scim.read or uaa.admin required")
+                             headerWithName("Authorization").description("Access token with scim.write or uaa.admin required")
                          ),
                          createFields,
                          responseFields(createResponse)
+                )
+            );
+    }
+
+    @Test
+    public void test_unlock_user() throws Exception {UserAccountStatus alteredAccountStatus = new UserAccountStatus();
+        alteredAccountStatus.setLocked(false);
+        String jsonStatus = JsonUtils.writeValueAsString(alteredAccountStatus);
+
+        getMockMvc()
+            .perform(
+                RestDocumentationRequestBuilders.patch("/Users/{userId}/status", user.getId())
+                    .header("Authorization", "Bearer " + scimWriteToken)
+                    .accept(APPLICATION_JSON)
+                    .contentType(APPLICATION_JSON)
+                    .content(jsonStatus)
+            )
+            .andExpect(status().isOk())
+            .andExpect(content().json(jsonStatus))
+            .andDo(
+                document("{ClassName}/{methodName}",
+                    preprocessRequest(prettyPrint()),
+                    preprocessResponse(prettyPrint()),
+                    pathParameters(parameterWithName("userId").description(userIdDescription)),
+                    requestHeaders(
+                        headerWithName("Authorization").description("Access token with scim.write, uaa.account_status.write, or uaa.admin required")
+                    ),
+                    requestFields(fieldWithPath("locked").optional(null).description("Set to `false` in order to unlock the user when they have been locked out according to the password lock-out policy. Setting to `true` will produce an error, as the user cannot be locked out via the API.").type(BOOLEAN)),
+                    responseFields(fieldWithPath("locked").description("The `locked` value given in the request.").type(BOOLEAN))
                 )
             );
     }
@@ -373,7 +428,7 @@ public class ScimUserEndpointDocs extends InjectedMockContextTest {
                          preprocessResponse(prettyPrint()),
                          pathParameters(parameterWithName("userId").description(userIdDescription)),
                          requestHeaders(
-                             headerWithName("Authorization").description("Access token with scim.read or uaa.admin required"),
+                             headerWithName("Authorization").description("Access token with scim.write or uaa.admin required"),
                              headerWithName("If-Match").description("The version of the SCIM object to be updated. Wildcard (*) accepted.")
                          ),
                          updateFields,
@@ -408,13 +463,48 @@ public class ScimUserEndpointDocs extends InjectedMockContextTest {
                          preprocessResponse(prettyPrint()),
                          pathParameters(parameterWithName("userId").description(userIdDescription)),
                          requestHeaders(
-                             headerWithName("Authorization").description("Access token with scim.read or uaa.admin required"),
+                             headerWithName("Authorization").description("Access token with scim.write or uaa.admin required"),
                              headerWithName("If-Match").optional().description("The version of the SCIM object to be deleted. Optional.")
                          ),
 
                          responseFields(updateResponse)
                 )
             );
+    }
+
+    @Test
+    public void test_Get_User() throws Exception {
+        ApprovalStore store = getWebApplicationContext().getBean(ApprovalStore.class);
+        Approval approval = new Approval()
+          .setUserId(user.getId())
+          .setStatus(Approval.ApprovalStatus.APPROVED)
+          .setScope("uaa.user")
+          .setClientId("identity")
+          .setExpiresAt(new Date(System.currentTimeMillis()+30000))
+          .setLastUpdatedAt(new Date(System.currentTimeMillis()+30000));
+        store.addApproval(approval);
+
+        getMockMvc().perform(
+          RestDocumentationRequestBuilders.get("/Users/{userId}", user.getId())
+            .accept(APPLICATION_JSON)
+            .header("Authorization", "Bearer "+scimReadToken)
+            .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+            .header("If-Match", user.getVersion())
+        )
+          .andExpect(status().isOk())
+          .andDo(
+            document("{ClassName}/{methodName}",
+              preprocessRequest(prettyPrint()),
+              preprocessResponse(prettyPrint()),
+              pathParameters(parameterWithName("userId").description(userIdDescription)),
+              requestHeaders(
+                headerWithName("Authorization").description("Access token with scim.write or uaa.admin required"),
+                headerWithName("If-Match").optional().description("The version of the SCIM object to be deleted. Optional.")
+              ),
+
+              responseFields(updateResponse)
+            )
+          );
     }
 
 
@@ -441,7 +531,7 @@ public class ScimUserEndpointDocs extends InjectedMockContextTest {
                          preprocessResponse(prettyPrint()),
                          pathParameters(parameterWithName("userId").description(userIdDescription)),
                          requestHeaders(
-                             headerWithName("Authorization").description("Access token with scim.read or uaa.admin required")
+                             headerWithName("Authorization").description("Access token with password.write or uaa.admin required")
                          ),
                          requestFields(
                              fieldWithPath("oldPassword").required().description("Old password.").type(STRING),
