@@ -1,0 +1,1 @@
+ALTER TABLE identity_zone ADD config varchar(max) DEFAULT NULL;
