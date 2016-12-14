@@ -34,8 +34,9 @@ import org.cloudfoundry.identity.uaa.user.JdbcUaaUserDatabase;
 import org.cloudfoundry.identity.uaa.user.UaaAuthority;
 import org.cloudfoundry.identity.uaa.user.UaaUser;
 import org.cloudfoundry.identity.uaa.provider.IdentityProviderProvisioning;
-import org.cloudfoundry.identity.uaa.zone.IdentityZone;
 import org.cloudfoundry.identity.uaa.provider.JdbcIdentityProviderProvisioning;
+import org.cloudfoundry.identity.uaa.resources.jdbc.DefaultBooleanValueAdapter;
+import org.cloudfoundry.identity.uaa.zone.IdentityZone;
 import org.joda.time.DateTime;
 import org.junit.Before;
 import org.junit.Test;
@@ -223,9 +224,9 @@ public class LoginSamlAuthenticationProviderTests extends JdbcTestBase {
 
         when(consumer.processAuthenticationResponse(anyObject())).thenReturn(credential);
 
-        userDatabase = new JdbcUaaUserDatabase(jdbcTemplate);
+        userDatabase = new JdbcUaaUserDatabase(jdbcTemplate, new DefaultBooleanValueAdapter());
         userDatabase.setDefaultAuthorities(new HashSet<>(Arrays.asList(UaaAuthority.UAA_USER.getAuthority())));
-        providerProvisioning = new JdbcIdentityProviderProvisioning(jdbcTemplate);
+        providerProvisioning = new JdbcIdentityProviderProvisioning(jdbcTemplate, new DefaultBooleanValueAdapter());
         publisher = new CreateUserPublisher(bootstrap);
         authprovider = new LoginSamlAuthenticationProvider();
 
