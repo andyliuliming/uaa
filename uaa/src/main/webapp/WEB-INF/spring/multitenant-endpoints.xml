@@ -28,6 +28,7 @@
 
     <bean id="identityProviderProvisioning" class="org.cloudfoundry.identity.uaa.provider.JdbcIdentityProviderProvisioning">
         <constructor-arg ref="jdbcTemplate"/>
+        <constructor-arg ref="booleanValueAdapter"/>
     </bean>
 
     <bean id="identityZoneEndpoints" class="org.cloudfoundry.identity.uaa.zone.IdentityZoneEndpoints">
@@ -183,6 +184,7 @@
     <bean id="serviceProviderProvisioning"
         class="org.cloudfoundry.identity.uaa.provider.saml.idp.JdbcSamlServiceProviderProvisioning">
         <constructor-arg ref="jdbcTemplate"/>
+        <constructor-arg ref="booleanValueAdapter"/>
     </bean>
 
     <bean id="serviceProviderEndpoints"
